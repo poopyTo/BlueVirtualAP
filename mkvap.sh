@@ -57,7 +57,9 @@ sudo ifconfig $1 10.0.0.1 netmask 255.255.255.0 up # Init the interface
 sleep 2
 sudo /etc/init.d/isc-dhcp-server restart # Restart dhcp server
 sudo sysctl -w net.ipv4.ip_forward=1 # Allow IP forwarding
-sudo iptables -t nat -A POSTROUTING -s 10.0.0.0/16 -o $2 -j MASQUERADE # Routing rule
+sudo iptables -t nat -A POSTROUTING -o $2 -j MASQUERADE # Routing rules
+sudo iptables -A FORWARD -i $1 -s 10.0.0.0/16 -j ACCEPT
+sudo iptables -A FORWARD -i $2 -d 10.0.0.0/16 -j ACCEPT
 
 # Finally, launch the AP
 #sudo hostapd -d /etc/hostapd/hostapd.conf
