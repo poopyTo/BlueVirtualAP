@@ -28,9 +28,11 @@
 int debug;
 FILE *logfile;
 struct sockaddr_in source,dest;
+int pcount;
 
 void process_packet(unsigned char* , int);
 void print_ip_header(unsigned char* , int);
+void print_unknown_packet(unsigned char * , int );
 void print_tcp_packet(unsigned char * , int );
 void print_udp_packet(unsigned char * , int );
 void print_icmp_packet(unsigned char* , int );
@@ -121,7 +123,7 @@ void process_packet(unsigned char* buffer, int size)
 {
     //Get the IP Header part of this packet , excluding the ethernet header
     struct iphdr *iph = (struct iphdr*)(buffer + sizeof(struct ethhdr));
-    do_debug("processing packet, IP protocol code: %d\n", iph->protocol);
+    do_debug("processing packet %d, IP protocol number: %d\n", pcount++, iph->protocol);
     switch (iph->protocol) //Check the Protocol and do accordingly...
     {
         case 1:  //ICMP Protocol
@@ -129,6 +131,7 @@ void process_packet(unsigned char* buffer, int size)
             break;
          
         case 2:  //IGMP Protocol
+            print_unknown_packet(buffer, size);
             break;
          
         case 6:  //TCP Protocol            
@@ -140,6 +143,7 @@ void process_packet(unsigned char* buffer, int size)
             break;
          
         default: //Some Other Protocol like ARP etc.
+            print_unknown_packet(buffer, size);
             break;
     }
     
@@ -186,6 +190,16 @@ void print_ip_header(unsigned char* Buffer, int Size)
     fprintf(logfile , "   |-Checksum : %d\n",ntohs(iph->check));
     fprintf(logfile , "   |-Source IP        : %s\n",inet_ntoa(source.sin_addr));
     fprintf(logfile , "   |-Destination IP   : %s\n",inet_ntoa(dest.sin_addr));
+}
+
+void print_unknown_packet(unsigned char *Buffer , int Size)
+{         
+    fprintf(logfile , "\n\n***********************Unknown Packet*************************\n");      
+     
+    //Move the pointer ahead and reduce the size of string
+    print_data(Buffer, Size);
+     
+    fprintf(logfile , "\n###########################################################");
 }
  
 void print_tcp_packet(unsigned char* Buffer, int Size)
@@ -374,9 +388,9 @@ int main(int argc, char *argv[]) {
 	int tap_fd;
 	char if_name[IFNAMSIZ] = "tap0";
 	int flags = IFF_TAP;
-	uint16_t nread;
-	// uint16_t nread, nwrite, plength;
+	uint16_t nread, nwrite, plength;
 	unsigned char buffer[BUFSIZE];
+    pcount = 0;
 
 	debug = 1;
 
@@ -384,7 +398,7 @@ int main(int argc, char *argv[]) {
 	logfile=fopen("log.txt","w");
     if(logfile==NULL) 
     {
-        printf("Unable to create log.txt file.");
+       fprintf(stderr, "Unable to create log.txt file.");
     }
 
 	/* initialize tun/tap interface */
@@ -392,6 +406,8 @@ int main(int argc, char *argv[]) {
 		fprintf(stderr, "Error connecting to tun/tap interface %s!\n", if_name);
 		exit(1);
 	}
+
+    fprintf(stderr, "listening on tap0 interface...");
 
 	while(1) {
 	    int ret;
@@ -414,18 +430,13 @@ int main(int argc, char *argv[]) {
 	    if(FD_ISSET(tap_fd, &rd_set)) {
 	      /* data from tun/tap: just read it and write it to the network */
 	      
-	      nread = cread(tap_fd, buffer, BUFSIZE);
-	      
+	      nread = cread(tap_fd, buffer, BUFSIZE);	      
 	      do_debug("Read %d bytes from the tap interface\n", nread);
 
 	      process_packet((unsigned char*)buffer, nread);
 
-	      /* write length + packet */
-	      // plength = htons(nread);
-	      // nwrite = cwrite(net_fd, (char *)&plength, sizeof(plength));
-	      // nwrite = cwrite(net_fd, buffer, nread);
-	      
-	      // do_debug("Written %d bytes to the network\n", nwrite);
+          nwrite = cwrite(tap_fd, buffer, nread);
+          do_debug("Wrote %d bytes to the tap interface\n", nread);
 	    }
     }
 
