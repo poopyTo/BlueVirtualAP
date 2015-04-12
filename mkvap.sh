@@ -40,7 +40,7 @@ fi
 sudo touch /etc/hostapd/hostapd.conf # start from scratch config
 sudo sh -c "echo 'interface=$1
 driver=nl80211
-ssid=BlueVAP
+ssid=BlueAP
 hw_mode=g
 channel=11' >> /etc/hostapd/hostapd.conf"
 
@@ -58,11 +58,13 @@ sleep 2
 sudo /etc/init.d/isc-dhcp-server restart # Restart dhcp server
 sudo sysctl -w net.ipv4.ip_forward=1 # Allow IP forwarding
 sudo iptables -t nat -A POSTROUTING -o $2 -j MASQUERADE # Routing rules
-sudo iptables -A FORWARD -i $1 -s 10.0.0.0/16 -j ACCEPT
+sudo iptables -D FORWARD -i $1 -s 10.0.0.0/16 -j ACCEPT # Deletes if exists
+sudo iptables -D FORWARD -i $2 -d 10.0.0.0/16 -j ACCEPT # Crazy redundant, but prevents duplicates from building up
+sudo iptables -A FORWARD -i $1 -s 10.0.0.0/16 -j ACCEPT # Re-add
 sudo iptables -A FORWARD -i $2 -d 10.0.0.0/16 -j ACCEPT
 
 # Finally, launch the AP
 #sudo hostapd -d /etc/hostapd/hostapd.conf
 sudo service hostapd start
 sudo nmcli nm wifi on
-sudo service hostapd restart	
+sudo service hostapd restart
