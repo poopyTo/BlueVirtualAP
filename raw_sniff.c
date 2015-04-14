@@ -15,9 +15,9 @@
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <sys/ioctl.h>
-#include <sys/time.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include <time.h>
 
 #define IPSTRLEN 16
 #define BUFLEN 65536
@@ -29,6 +29,8 @@ void print_tcp_packet(unsigned char*, int);
 void print_udp_packet(unsigned char*, int);
 void print_icmp_packet(unsigned char*, int);
 void print_plaintext_data(char*, unsigned char*, int);
+char* get_timestamp();
+void replace_char(char *s, char find, char replace);
  
 FILE *asciifile;
 struct sockaddr_in source, dest;
@@ -41,6 +43,7 @@ int main(int argc, char* argv[])
     int option;
     char if_name[IFNAMSIZ] = "";
     progname = argv[0];
+    char fname[32];
 
     /* Check command line options */
     while((option = getopt(argc, argv, "i:f:h")) > 0) {
@@ -65,7 +68,11 @@ int main(int argc, char* argv[])
          
     unsigned char *buffer = (unsigned char *) malloc(BUFLEN);
 
-    asciifile=fopen("sniffed.txt","w");
+    strncpy(fname, get_timestamp(), 32);
+    replace_char(fname,' ','_');
+    fname[strlen(fname)-1] = '\0';
+    strcat(fname,".txt");
+    asciifile=fopen(fname,"w");
     if(asciifile==NULL)
     {
         printf("Unable to create file for writing traffic");
@@ -103,7 +110,7 @@ int main(int argc, char* argv[])
 
 void usage() {
     fprintf(stderr, "Usage:\n");
-    fprintf(stderr, "%s -i <ifacename> [-a <filterIP>]\n", progname);
+    fprintf(stderr, "%s -i <ifacename> [-f <filterIP>]\n", progname);
     fprintf(stderr, "%s -h\n", progname);
     fprintf(stderr, "\n");
     fprintf(stderr, "-i <ifacename>: Name of interface to use (mandatory)\n");
@@ -214,13 +221,16 @@ void print_plaintext_data(char* tr_proto, unsigned char* data, int psize)
     int i, j;
     char src_ip[IPSTRLEN];
     char dst_ip[IPSTRLEN];
+    char ts[32];
     strncpy(src_ip, inet_ntoa(source.sin_addr), IPSTRLEN);
     strncpy(dst_ip, inet_ntoa(dest.sin_addr), IPSTRLEN);
-    
+    strncpy(ts, get_timestamp(), 32);
+
+    // packet heading includes transport protocol, source/dest IPs, and timestamp
     fprintf(asciifile, "%s: %s > %s ", tr_proto, src_ip, dst_ip);
-    int divstrlen = strlen(tr_proto) + strlen(src_ip) + strlen(dst_ip) + 6;
-    for (j = 0; j < 80-divstrlen; j++) fprintf(asciifile, "~");
-    fprintf(asciifile, "\n");
+    int divstrlen = strlen(tr_proto) + strlen(src_ip) + strlen(dst_ip) + strlen(ts) + 7;
+    for (j = 0; j < 80-divstrlen; j++) fprintf(asciifile, "~");    
+    fprintf(asciifile, " %s", ts);
 
     if (psize == 0) {
         fprintf(asciifile, "[empty payload]\n\n");
@@ -233,5 +243,20 @@ void print_plaintext_data(char* tr_proto, unsigned char* data, int psize)
             if(i!=0 && i%79==0) fprintf(asciifile, "\n");
         }
         fprintf(asciifile, "\n\n");
+    }
+}
+
+char* get_timestamp()
+{
+    time_t ltime;
+    ltime=time(NULL);
+    return asctime(localtime(&ltime));
+}
+
+void replace_char(char *s, char find, char replace) {
+    while (*s != 0) {
+        if (*s == find)
+        *s = replace;
+        s++;
     }
 }
